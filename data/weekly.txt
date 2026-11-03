@@ -1,0 +1,55 @@
+:Product: Weekly Highlights and Forecasts
+:Issued: 2026 Nov 02 0217 UTC
+# Prepared by the US Dept. of Commerce, NOAA, Space Weather Prediction Center
+# Product description and SWPC contact on the Web
+# https://www.swpc.noaa.gov/content/subscription-services
+#
+#                Weekly Highlights and Forecasts
+#
+Highlights of Solar and Geomagnetic Activity
+26 October - 01 November 2026
+
+Solar activity was at low levels with nine C-Class flares observed.
+Region 4561 (S11, L=28, class/area=Dai/030 on 26 Oct) produced the
+largest event of the period: a C2.8 flare at 26/1840 UTC, as well as
+nearly all of the remaining C-class flares of the period. The only
+exception was a C1.5 flare at 26/0134 UTC from Region 4560 (N13,
+L=49, class/area=Fao/020 on 26 Oct). The only notable CME activity
+was from a filament lift off at approximately 26/2142 UTC from an
+area near N30E75. Analysis indicated mostly a miss, though a
+glancing blow was not ruled out of the question on 31 Oct. 
+
+No proton events were observed at geosynchronous orbit.
+
+The greater than 2 MeV electron flux at geosynchronous orbit was at
+high levels throughout the period, with the exception of 31 Oct when
+values dropped to moderate levels. 
+
+Geomagnetic field activity was at quiet levels 26-29 Oct, quiet to
+active levels on 30 Oct, unsettled to G2 (Moderate) levels on 31
+Oct, and quiet to G1 (Minor) levels on 01 Nov. Activity increased
+the last two days as a result of the onset of a positive polarity CH
+HSS combined with possible CME effects mixed in from the 26 Oct
+filament eruption. 
+
+Forecast of Solar and Geomagnetic Activity
+02 November - 28 November 2026
+
+Solar activity is expected to be predominantly at low levels, with a
+slight chance to a chance for isolated M-class
+(R1-R2/Minor-Moderate) radio blackouts) flare activity associated
+with any developing spot groups during the period. 
+
+No proton events are expected at geosynchronous orbit.
+
+The greater than 2 MeV electron flux at geosynchronous orbit is
+expected to be at moderate levels on 02 Nov and 06-18 Nov. Flux
+levels are anticipated to reach high levels on 03-05 Nov and 19-28
+Nov. 
+
+Geomagnetic field activity is expected to be at mostly quiet levels
+on 03-04 Nov, 08 Nov, 13-15 Nov, and 20-25 Nov. Unsettled to active
+periods are anticipated on 02 Nov, 05-07 Nov, 09-12 Nov, and 26 Nov.
+An increase to G1, possibly G2 geomagnetic storm levels is likely on
+27-28 Nov. The increase in activity is associated with multiple
+recurrent coronal holes. 
