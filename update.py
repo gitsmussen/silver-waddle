@@ -11,8 +11,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 # --------------------------------------------------
@@ -36,7 +35,6 @@ MAX_BACKOFF = 300
 MAX_RETRY_WAIT = 300
 REQUEST_GAP_SECONDS = 1
 
-ALLOWED_REDIRECT_HOSTS = {"services.swpc.noaa.gov"}
 ALERTS_ARCHIVE = "alerts.jsonl"
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
 MAX_NEW_ALERTS = 10
@@ -67,12 +65,12 @@ FILES = {
 FILE_SIZE_LIMITS = {
     "sgarf.txt": 64 * 1024,
     "weekly.txt": 64 * 1024,
-    "3-dayforecast.txt": 64 * 1024,
+    "3-day-forecast.txt": 64 * 1024,
     "3-day-geomag-forecast.txt": 64 * 1024,
     "daily-geomagnetic-indices.txt": 64 * 1024,
     "discussion.txt": 64 * 1024,
     "noaa-planetary-k-index.json": 128 * 1024,
-    "alerts.jsonl": 256 * 1024,
+    "alerts.json": 256 * 1024,
 }
 
 
@@ -87,6 +85,21 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------
+# Redirect handling
+# --------------------------------------------------
+
+class NoRedirectHandler(HTTPRedirectHandler):
+    """Reject every HTTP redirect instead of following it."""
+
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        return None
+
+
+HTTP_OPENER = build_opener(NoRedirectHandler())
+REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 
 
 # --------------------------------------------------
@@ -108,15 +121,8 @@ def backup_paths(filename: str):
 
 
 # --------------------------------------------------
-# Redirect and retry helpers
+# Retry helpers
 # --------------------------------------------------
-
-def is_allowed_redirect(url: str) -> bool:
-    host = urlparse(url).hostname
-    if host is None:
-        return False
-    return host in ALLOWED_REDIRECT_HOSTS
-
 
 def get_retry_after(error: HTTPError) -> float | None:
     headers = getattr(error, "headers", None)
@@ -211,7 +217,7 @@ def validate_file(filename: str, temp_path: Path, max_size: int) -> bool:
 
 def download_file(url: str, destination: Path, max_size: int) -> Path | None:
     """
-    Download to a temporary file.
+    Download to a temporary file without following redirects.
 
     Returns the temporary file path only after a successful
     download and validation.
@@ -237,16 +243,10 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
                 },
             )
 
-            with urlopen(
+            with HTTP_OPENER.open(
                 request,
                 timeout=REQUEST_TIMEOUT,
             ) as response:
-                final_url = response.geturl()
-                if not is_allowed_redirect(final_url):
-                    raise ValueError(
-                        f"Unexpected redirect target: {final_url}"
-                    )
-
                 if not 200 <= response.status < 300:
                     raise RuntimeError(
                         f"Unexpected HTTP status: {response.status}"
@@ -300,6 +300,13 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
 
+            if isinstance(error, HTTPError) and error.code in REDIRECT_STATUS_CODES:
+                logger.error(
+                    "%s: Redirect refused; redirects are not allowed",
+                    destination.name,
+                )
+                break
+
             retry_after = (
                 get_retry_after(error)
                 if isinstance(error, HTTPError)
@@ -350,7 +357,7 @@ def read_alerts_archive() -> list[dict]:
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                entry = json.loads(line)
             except json.JSONDecodeError as error:
                 logger.error(
                     "%s: Invalid JSONL record rejected: %s",
@@ -359,15 +366,33 @@ def read_alerts_archive() -> list[dict]:
                 )
                 raise
 
+            if not isinstance(entry, dict):
+                raise ValueError("JSONL alert record must be an object")
+            entries.append(entry)
+
     return entries
+
+
+def parse_issue_datetime(entry: dict) -> datetime:
+    value = entry.get("issue_datetime")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Alert is missing a valid issue_datetime")
+
+    try:
+        issue_time = datetime.fromisoformat(value.strip())
+    except ValueError as error:
+        raise ValueError(f"Invalid issue_datetime: {value!r}") from error
+
+    if issue_time.tzinfo is None:
+        issue_time = issue_time.replace(tzinfo=timezone.utc)
+
+    return issue_time.astimezone(timezone.utc)
 
 
 def update_alerts_archive(url: str, max_size: int) -> bool:
     """
-    Maintain an append-only alerts archive in JSONL format.
-
-    The archive is ordered oldest to newest, so we append only newly
-    observed alerts in reverse order and keep a fail-safe cap.
+    Append only alerts whose issue_datetime is later than the latest
+    timestamp already present in the oldest-to-newest JSONL archive.
     """
 
     logger.info("Processing %s", ALERTS_ARCHIVE)
@@ -388,32 +413,51 @@ def update_alerts_archive(url: str, max_size: int) -> bool:
         if not isinstance(remote_entries, list):
             raise ValueError("Alert snapshot is not a JSON array")
 
+        if not all(isinstance(entry, dict) for entry in remote_entries):
+            raise ValueError("Every alert in the snapshot must be an object")
+
+        # Parse every remote timestamp before writing anything, so malformed
+        # records cannot result in a partial archive update.
+        remote_with_times = [
+            (parse_issue_datetime(entry), index, entry)
+            for index, entry in enumerate(remote_entries)
+        ]
+
         archive_path = DATA_DIR / ALERTS_ARCHIVE
         archive_entries = read_alerts_archive()
 
         if not archive_entries:
+            if len(remote_entries) > MAX_NEW_ALERTS:
+                logger.error(
+                    "%s: Initial snapshot has %d alerts (maximum %d); skipping",
+                    ALERTS_ARCHIVE,
+                    len(remote_entries),
+                    MAX_NEW_ALERTS,
+                )
+                return False
+
+            # NOAA sends newest first; store oldest first.
             ordered = list(reversed(remote_entries))
-            with archive_path.open("w", encoding="utf-8") as file:
+            with archive_path.open("a", encoding="utf-8") as file:
                 for item in ordered:
                     file.write(json.dumps(item, separators=(",", ":")) + "\n")
             logger.info("Created %s from remote snapshot", ALERTS_ARCHIVE)
             return True
 
-        latest_local = archive_entries[-1]
-        latest_local_key = (
-            latest_local.get("issue_datetime"),
-            latest_local.get("product_id"),
+        latest_archive_time = max(
+            parse_issue_datetime(entry)
+            for entry in archive_entries
         )
 
-        new_entries = []
-        for entry in remote_entries:
-            entry_key = (
-                entry.get("issue_datetime"),
-                entry.get("product_id"),
-            )
-            if entry_key == latest_local_key:
-                break
-            new_entries.append(entry)
+        # Keep only strictly later issue times. Reversing the snapshot before
+        # a stable sort preserves oldest-first order for equal timestamps.
+        new_entries = [
+            (issue_time, entry)
+            for issue_time, _index, entry in remote_with_times
+            if issue_time > latest_archive_time
+        ]
+        new_entries.reverse()
+        new_entries.sort(key=lambda item: item[0])
 
         if len(new_entries) > MAX_NEW_ALERTS:
             logger.error(
@@ -427,24 +471,23 @@ def update_alerts_archive(url: str, max_size: int) -> bool:
             logger.info("%s: No new alerts to append", ALERTS_ARCHIVE)
             return True
 
-        ordered_new_entries = list(reversed(new_entries))
         with archive_path.open("a", encoding="utf-8") as file:
-            for item in ordered_new_entries:
+            for _issue_time, item in new_entries:
                 file.write(json.dumps(item, separators=(",", ":")) + "\n")
 
         logger.info(
             "%s: Appended %d alerts",
             ALERTS_ARCHIVE,
-            len(ordered_new_entries),
+            len(new_entries),
         )
         return True
 
-    except (json.JSONDecodeError, ValueError, TypeError) as error:
-        logger.error("%s: Invalid alert snapshot: %s", ALERTS_ARCHIVE, error)
+    except (json.JSONDecodeError, ValueError, TypeError, OSError) as error:
+        logger.error("%s: Alert archive update failed: %s", ALERTS_ARCHIVE, error)
         return False
 
     finally:
-        if temp_path is not None and temp_path.exists():
+        if temp_path.exists():
             temp_path.unlink(missing_ok=True)
 
 
@@ -525,7 +568,6 @@ def update_file(filename: str, url: str, max_size: int) -> bool:
         )
         return False
 
-    time.sleep(REQUEST_GAP_SECONDS)
     return install_file(filename, temp_path)
 
 
@@ -572,17 +614,23 @@ def main() -> None:
     logger.info("Data directory: %s", DATA_DIR)
 
     results = {}
+    requests_made = 0
 
     for filename, url in FILES.items():
+        if requests_made:
+            time.sleep(REQUEST_GAP_SECONDS)
         results[filename] = update_file(
             filename,
             url,
             FILE_SIZE_LIMITS.get(filename, 64 * 1024),
         )
+        requests_made += 1
 
+    if requests_made:
+        time.sleep(REQUEST_GAP_SECONDS)
     results[ALERTS_ARCHIVE] = update_alerts_archive(
         ALERTS_URL,
-        FILE_SIZE_LIMITS.get(ALERTS_ARCHIVE, 256 * 1024),
+        FILE_SIZE_LIMITS.get("alerts.json", 256 * 1024),
     )
 
     logger.info("=" * 50)
