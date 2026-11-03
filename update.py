@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 # --------------------------------------------------
 
 USER_AGENT = (
-    "WeatherDataFetcher/1.0 "
+    "silver-waddle/1.0 "
     "(+https://github.com/gitsmussen/silver-waddle; "
     "contact: git@smussen.no)"
 )
