@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 import json
@@ -86,7 +85,8 @@ def backup_paths(filename: str):
 # --------------------------------------------------
 
 def get_retry_after(error: HTTPError) -> float | None:
-    value = error.headers.get("Retry-After")
+    headers = getattr(error, "headers", None)
+    value = headers.get("Retry-After") if headers is not None else None
 
     if not value:
         return None
@@ -116,6 +116,8 @@ def get_retry_after(error: HTTPError) -> float | None:
 def validate_file(filename: str, temp_path: Path) -> bool:
     """
     Validate downloaded content before touching existing files.
+
+    Text downloads must be UTF-8 text and not an obvious HTML error page.
     """
 
     if not temp_path.exists():
@@ -139,6 +141,26 @@ def validate_file(filename: str, temp_path: Path) -> bool:
             )
             return False
 
+    elif filename.endswith(".txt"):
+        try:
+            content = temp_path.read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError as error:
+            logger.error(
+                "%s: Non-text or invalid UTF-8 download rejected: %s",
+                filename,
+                error,
+            )
+            return False
+
+        if "\x00" in content:
+            logger.error("%s: Binary content rejected", filename)
+            return False
+
+        prefix = content.lstrip()[:512].lower()
+        if prefix.startswith("<!doctype html") or prefix.startswith("<html"):
+            logger.error("%s: HTML response rejected", filename)
+            return False
+
     return True
 
 
@@ -156,8 +178,9 @@ def download_file(url: str, destination: Path) -> Path | None:
 
         try:
             logger.info(
-                "Downloading %s (attempt %d/%d)",
+                "Downloading %s from %s (attempt %d/%d)",
                 destination.name,
+                url,
                 attempt,
                 MAX_ATTEMPTS,
             )
@@ -209,8 +232,10 @@ def download_file(url: str, destination: Path) -> Path | None:
         except Exception as error:
 
             logger.warning(
-                "%s download failed: %s",
+                "%s download from %s failed (%s): %s",
                 destination.name,
+                url,
+                type(error).__name__,
                 error,
             )
 
@@ -230,7 +255,9 @@ def download_file(url: str, destination: Path) -> Path | None:
                     MAX_BACKOFF,
                 )
 
-                delay = max(backoff, retry_after or 0)
+                # Keep the total delay within the configured maximum,
+                # even if the server sends a longer Retry-After value.
+                delay = min(max(backoff, retry_after or 0), MAX_BACKOFF)
 
                 logger.warning(
                     "Retrying %s in %.0f seconds",
@@ -415,6 +442,6 @@ if __name__ == "__main__":
 
 
 # Weather data from MET Norway (CC BY 4.0).
-# Space weather data from NOAA SWPC. 
+# Space weather data from NOAA SWPC.
 # Local copies of the files are only used if a live fetch fails.
 # allright
