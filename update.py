@@ -46,7 +46,7 @@ FILES = {
     "weekly.txt":
         "https://services.swpc.noaa.gov/text/weekly.txt",
 
-    "3-dayforecast.txt":
+    "3-day-forecast.txt":
         "https://services.swpc.noaa.gov/text/3-day-forecast.txt",
 
     "3-day-geomag-forecast.txt":
