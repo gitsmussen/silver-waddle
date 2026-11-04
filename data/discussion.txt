@@ -1,5 +1,5 @@
 :Product: Forecast Discussion
-:Issued: 2026 Nov 04 0030 UTC
+:Issued: 2026 Nov 04 1230 UTC
 # Prepared by the U.S. Dept. of Commerce, NOAA, Space Weather Prediction Center
 #
 Solar Activity
