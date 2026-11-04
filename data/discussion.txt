@@ -1,65 +1,66 @@
 :Product: Forecast Discussion
-:Issued: 2026 Nov 03 1230 UTC
+:Issued: 2026 Nov 04 0030 UTC
 # Prepared by the U.S. Dept. of Commerce, NOAA, Space Weather Prediction Center
 #
 Solar Activity
 
 .24 hr Summary...
-Solar activity was very low in the past 24h. Region 4566 (S07E66,
-Cro/beta) was responsible for all the B-class flares of the period, with
-the largest one being a B7.7 at 02/0608 UTC. The other two active
-regions on disk, Region 4564 (N03E11, Hrx/alpha) and Region 4565
-(N13E35, Hsx/alpha), were decaying or stable, respectively.
+Solar activity continued to be at very low levels in the past 24h.
+Region 4566 (S06E53, Fao/beta-gamma-delta) showed growth in area and
+magnetic complexity and was the main responsible for the B-class flares
+of the period. Region 4564 (N03W02, Axx/alpha) continued decaying while
+Region 4565 (N14W20, Hsx/alpha) remained stable during the day.
 
-A filament erupted around 01/1800 UTC and was associated with a CME
-observed propagating away from the W-limb in the first hours of the 02
-Nov UTC day. Analysis of this CME indicates a weak glancing blow
-near-Earth late on 05 Nov. No other Earth-directed CMEs were observed in
-the available coronagraph imagery.
+A coronal activity was observed during the period, likely associated
+with a slow-lifted filament beyond the west-limb. No Earth-directed CMEs
+were observed in the available coronagraph imagery.
 
 .Forecast...
-Solar activity is expected to be very low with a chance for C-class
-flares over 05 Nov.
+Solar activity is likely to reach low levels, with a chance for M-class
+flares and a slight chance for X-class events on 04-06 Nov, mostly due
+to Region 4566 configuration and development.
 
 Energetic Particle
 
 .24 hr Summary...
 The greater than 2 MeV electron flux reached high levels with a peak
-flux of 4,480 pfu at 02/1540 UTC. The greater than 10 MeV proton flux
+flux of 4,077 pfu at 03/1620 UTC. The greater than 10 MeV proton flux
 was at background levels.
 
 .Forecast...
 The greater than 2 MeV electron flux is expected to continue reaching
-high levels through 05 Nov. The greater than 10 MeV proton flux is
-expected to remain at background levels through 05 Nov.
+high levels on 04-05 Nov, returning to moderate levels on 06 Nov. The
+greater than 10 MeV proton flux is expected to remain at background
+levels through 06 Nov.
 
 Solar Wind
 
 .24 hr Summary...
 Solar wind parameters continued reflecting waning positive polarity CH
 HSS influences. Total interplanetary magnetic field (IMF) strength was
-around 5 nT and the Bz (north-south) component oscillating between +/- 4
-nT. Solar wind speeds slowly decreased from 450 km/s levels down to 380
-km/s at the end of the period. Phi angle oscillated during the day,
-settling in the positive sector (away from the Sun) after about 02/1800
-UTC.
+around 5 nT and the Bz (north-south) component mostly negative, reaching
+as far south as -5 nT.
+
+Solar wind speeds continued decreasing from 400 km/s levels down to 325
+km/s at the end of the period. Phi angle remained mostly in the positive
+sector (away from the Sun) in the past 24h.
 
 .Forecast...
-The solar wind near-Earth is expected to reach undisturbed conditions on
-03-04 Nov, as the ongoing positive polarity CH HSS influences diminish.
-Mild disturbances are anticipated on 05 Nov, as a small positive
-polarity CH HSS becomes geoeffective and a weak glancing blow from 01
-Nov CME is possible.
+The solar wind near-Earth is expected to remain undisturbed on 04 Nov,
+as the ongoing positive polarity CH HSS influences vanish. Mild
+disturbances are anticipated (with low confidence) on 05-06 Nov, due to
+a weak glancing blow from 01 Nov CME and possible influences of a
+previously observed small positive polarity CH HSS (no longer visible).
 
 Geospace
 
 .24 hr Summary...
-The geomagnetic activity was at quiet to unsettled levels in the past
-24h due to waning positive polarity CH HSS influences.
+The geomagnetic activity remained at quiet levels in the past 24h.
 
 .Forecast...
 The geomagnetic field activity is expected to be mostly at quiet levels
-on 03-04 Nov as the ongoing positive polarity CH HSS influences vanish.
-Unsettled to active conditions are anticipated on 05 Nov as a response
-to influences of a small positive polarity CH HSS and the 01 Nov CME
+on 04 Nov as the ongoing positive polarity CH HSS influences are no
+longer significant near-Earth. Unsettled to active conditions are
+anticipated (with low confidence) on 05-06 Nov as a response to possible
+influences of a small positive polarity CH HSS and the 01 Nov CME
 glancing blow near Earth.
