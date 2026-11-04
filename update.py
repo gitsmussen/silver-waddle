@@ -6,12 +6,22 @@ import os
 import shutil
 import tempfile
 import time
-
+from collections.abc import Mapping
 from datetime import datetime, timezone
+from email.message import Message
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import TypeAlias, cast
 from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.response import addinfourl
+
+
+# JSON types used by the NOAA feeds and the local JSONL archives.
+JSONValue: TypeAlias = (
+    str | int | float | bool | None | list["JSONValue"] | dict[str, "JSONValue"]
+)
+JSONRecord: TypeAlias = dict[str, JSONValue]
 
 
 # --------------------------------------------------
@@ -25,7 +35,10 @@ USER_AGENT = (
 )
 
 DATA_DIR = Path(
-    os.environ.get("DATA_DIR", Path(__file__).resolve().parent /"data",)
+    os.environ.get(
+        "DATA_DIR",
+        Path(__file__).resolve().parent / "data",
+    )
 )
 
 REQUEST_TIMEOUT = 30
@@ -39,30 +52,26 @@ ALERTS_ARCHIVE = "alerts.jsonl"
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
 MAX_NEW_ALERTS = 10
 
-FILES = {
+KP_INDEX_FILENAME = "noaa-planetary-k-index.jsonl"
+KP_INDEX_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+KP_INDEX_LEGACY_FILENAME = "noaa-planetary-k-index.json"
+
+FILES: dict[str, str] = {
     "sgarf.txt":
         "https://services.swpc.noaa.gov/text/sgarf.txt",
-
     "weekly.txt":
         "https://services.swpc.noaa.gov/text/weekly.txt",
-
     "3-day-forecast.txt":
         "https://services.swpc.noaa.gov/text/3-day-forecast.txt",
-
     "3-day-geomag-forecast.txt":
         "https://services.swpc.noaa.gov/text/3-day-geomag-forecast.txt",
-
     "daily-geomagnetic-indices.txt":
         "https://services.swpc.noaa.gov/text/daily-geomagnetic-indices.txt",
-
     "discussion.txt":
         "https://services.swpc.noaa.gov/text/discussion.txt",
-
-    "noaa-planetary-k-index.json":
-        "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
 }
 
-FILE_SIZE_LIMITS = {
+FILE_SIZE_LIMITS: dict[str, int] = {
     "sgarf.txt": 64 * 1024,
     "weekly.txt": 64 * 1024,
     "3-day-forecast.txt": 64 * 1024,
@@ -94,7 +103,15 @@ logger = logging.getLogger(__name__)
 class NoRedirectHandler(HTTPRedirectHandler):
     """Reject every HTTP redirect instead of following it."""
 
-    def redirect_request(self, request, response, code, message, headers, new_url):
+    def redirect_request(
+        self,
+        req: Request,
+        fp: addinfourl,
+        code: int,
+        msg: str,
+        headers: Message,
+        newurl: str,
+    ) -> None:
         return None
 
 
@@ -106,17 +123,10 @@ REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 # Backup paths
 # --------------------------------------------------
 
-def backup_paths(filename: str):
+def backup_paths(filename: str) -> tuple[Path, Path, Path]:
     current = DATA_DIR / filename
-
-    old = current.with_name(
-        f"{current.stem}.old{current.suffix}"
-    )
-
-    older = current.with_name(
-        f"{current.stem}.older{current.suffix}"
-    )
-
+    old = current.with_name(f"{current.stem}.old{current.suffix}")
+    older = current.with_name(f"{current.stem}.older{current.suffix}")
     return current, old, older
 
 
@@ -132,23 +142,18 @@ def get_retry_after(error: HTTPError) -> float | None:
         return None
 
     try:
-        return max(0, float(value))
+        return max(0.0, float(value))
     except ValueError:
         pass
 
     try:
         retry_date = parsedate_to_datetime(value)
-
         if retry_date.tzinfo is None:
-            retry_date = retry_date.replace(
-                tzinfo=timezone.utc
-            )
-
+            retry_date = retry_date.replace(tzinfo=timezone.utc)
         return max(
-            0,
+            0.0,
             (retry_date - datetime.now(timezone.utc)).total_seconds(),
         )
-
     except (TypeError, ValueError, OverflowError):
         return None
 
@@ -158,9 +163,7 @@ def get_retry_after(error: HTTPError) -> float | None:
 # --------------------------------------------------
 
 def validate_file(filename: str, temp_path: Path, max_size: int) -> bool:
-    """
-    Validate downloaded content before touching existing files.
-    """
+    """Validate downloaded content before touching existing files."""
 
     if not temp_path.exists():
         logger.error("%s: Temporary file missing", filename)
@@ -185,11 +188,7 @@ def validate_file(filename: str, temp_path: Path, max_size: int) -> bool:
             with temp_path.open("r", encoding="utf-8-sig") as file:
                 json.load(file)
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            logger.error(
-                "%s: Invalid JSON rejected: %s",
-                filename,
-                error,
-            )
+            logger.error("%s: Invalid JSON rejected: %s", filename, error)
             return False
 
     if filename.endswith(".txt"):
@@ -216,15 +215,10 @@ def validate_file(filename: str, temp_path: Path, max_size: int) -> bool:
 
 
 def download_file(url: str, destination: Path, max_size: int) -> Path | None:
-    """
-    Download to a temporary file without following redirects.
-
-    Returns the temporary file path only after a successful
-    download and validation.
-    """
+    """Download to a temporary file without following redirects."""
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        temp_path = None
+        temp_path: Path | None = None
 
         try:
             logger.info(
@@ -237,16 +231,10 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
 
             request = Request(
                 url,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "*/*",
-                },
+                headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
             )
 
-            with HTTP_OPENER.open(
-                request,
-                timeout=REQUEST_TIMEOUT,
-            ) as response:
+            with HTTP_OPENER.open(request, timeout=REQUEST_TIMEOUT) as response:
                 if not 200 <= response.status < 300:
                     raise RuntimeError(
                         f"Unexpected HTTP status: {response.status}"
@@ -266,13 +254,11 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
                         chunk = response.read(65536)
                         if not chunk:
                             break
-
                         bytes_written += len(chunk)
                         if bytes_written > max_size:
                             raise ValueError(
                                 f"Downloaded file exceeds {max_size} bytes"
                             )
-
                         temp_file.write(chunk)
 
                     temp_file.flush()
@@ -307,12 +293,7 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
                 )
                 break
 
-            retry_after = (
-                get_retry_after(error)
-                if isinstance(error, HTTPError)
-                else None
-            )
-
+            retry_after = get_retry_after(error) if isinstance(error, HTTPError) else None
             if retry_after is not None and retry_after > MAX_RETRY_WAIT:
                 logger.warning(
                     "%s: Retry-After exceeds 5 minutes; treating as failure",
@@ -325,55 +306,127 @@ def download_file(url: str, destination: Path, max_size: int) -> Path | None:
                     INITIAL_BACKOFF * (2 ** (attempt - 1)),
                     MAX_BACKOFF,
                 )
-                delay = min(max(backoff, retry_after or 0), MAX_RETRY_WAIT)
-
-                logger.warning(
-                    "Retrying %s in %.0f seconds",
-                    destination.name,
-                    delay,
-                )
+                delay = min(max(backoff, retry_after or 0.0), MAX_RETRY_WAIT)
+                logger.warning("Retrying %s in %.0f seconds", destination.name, delay)
                 time.sleep(delay)
 
-    logger.error(
-        "%s: All download attempts failed",
-        destination.name,
-    )
+    logger.error("%s: All download attempts failed", destination.name)
     return None
+
+
+# --------------------------------------------------
+# JSONL archive helpers
+# --------------------------------------------------
+
+def load_json_records(path: Path) -> list[JSONRecord]:
+    """Read and validate a JSON array containing object records."""
+
+    with path.open("r", encoding="utf-8-sig") as file:
+        raw_data: object = json.load(file)
+
+    if not isinstance(raw_data, list):
+        raise ValueError(f"{path.name} must contain a JSON array")
+
+    records: list[JSONRecord] = []
+    for item in raw_data:
+        if not isinstance(item, dict) or not all(
+            isinstance(key, str) for key in item
+        ):
+            raise ValueError(f"{path.name} contains a non-object record")
+        records.append(cast(JSONRecord, item))
+    return records
+
+
+def read_jsonl_archive(path: Path) -> list[JSONRecord]:
+    """Read an oldest-to-newest JSONL archive, rejecting malformed rows."""
+
+    if not path.exists():
+        return []
+
+    records: list[JSONRecord] = []
+    with path.open("r", encoding="utf-8") as file:
+        for line_number, line in enumerate(file, start=1):
+            if not line.strip():
+                continue
+            try:
+                item: object = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"{path.name}, line {line_number}: invalid JSON"
+                ) from error
+            if not isinstance(item, dict) or not all(
+                isinstance(key, str) for key in item
+            ):
+                raise ValueError(
+                    f"{path.name}, line {line_number}: record must be an object"
+                )
+            records.append(cast(JSONRecord, item))
+    return records
+
+
+def append_jsonl_records(path: Path, records: list[JSONRecord]) -> None:
+    """Append a complete batch; roll back the file length if writing fails."""
+
+    if not records:
+        return
+
+    payload = "".join(
+        json.dumps(record, separators=(",", ":"), ensure_ascii=False) + "\n"
+        for record in records
+    ).encode("utf-8")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.stat().st_size:
+        with path.open("rb") as existing:
+            existing.seek(-1, os.SEEK_END)
+            if existing.read(1) != b"\n":
+                raise ValueError(f"{path.name} does not end with a newline")
+
+    with path.open("a+b") as archive:
+        original_size = archive.tell()
+        try:
+            archive.write(payload)
+            archive.flush()
+            os.fsync(archive.fileno())
+        except OSError:
+            archive.truncate(original_size)
+            archive.flush()
+            os.fsync(archive.fileno())
+            raise
+
+
+def write_jsonl_atomically(path: Path, records: list[JSONRecord]) -> None:
+    """Create or replace a JSONL archive through a same-directory temp file."""
+
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            for record in records:
+                temp_file.write(
+                    json.dumps(record, separators=(",", ":"), ensure_ascii=False)
+                    + "\n"
+                )
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 # --------------------------------------------------
 # Alerts archive handling
 # --------------------------------------------------
 
-def read_alerts_archive() -> list[dict]:
-    archive_path = DATA_DIR / ALERTS_ARCHIVE
-    if not archive_path.exists():
-        return []
-
-    entries = []
-    with archive_path.open("r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError as error:
-                logger.error(
-                    "%s: Invalid JSONL record rejected: %s",
-                    ALERTS_ARCHIVE,
-                    error,
-                )
-                raise
-
-            if not isinstance(entry, dict):
-                raise ValueError("JSONL alert record must be an object")
-            entries.append(entry)
-
-    return entries
-
-
-def parse_issue_datetime(entry: dict) -> datetime:
+def parse_issue_datetime(entry: JSONRecord) -> datetime:
     value = entry.get("issue_datetime")
     if not isinstance(value, str) or not value.strip():
         raise ValueError("Alert is missing a valid issue_datetime")
@@ -385,46 +438,30 @@ def parse_issue_datetime(entry: dict) -> datetime:
 
     if issue_time.tzinfo is None:
         issue_time = issue_time.replace(tzinfo=timezone.utc)
-
     return issue_time.astimezone(timezone.utc)
 
 
-def update_alerts_archive(url: str, max_size: int) -> bool:
-    """
-    Append only alerts whose issue_datetime is later than the latest
-    timestamp already present in the oldest-to-newest JSONL archive.
-    """
+def update_alerts_archive() -> bool:
+    """Append new NOAA alerts to the oldest-to-newest JSONL archive."""
 
     logger.info("Processing %s", ALERTS_ARCHIVE)
-
     temp_path = download_file(
-        url,
+        ALERTS_URL,
         DATA_DIR / "alerts.json",
-        max_size,
+        FILE_SIZE_LIMITS["alerts.json"],
     )
     if temp_path is None:
         logger.error("%s: Existing archive left untouched", ALERTS_ARCHIVE)
         return False
 
     try:
-        with temp_path.open("r", encoding="utf-8-sig") as file:
-            remote_entries = json.load(file)
-
-        if not isinstance(remote_entries, list):
-            raise ValueError("Alert snapshot is not a JSON array")
-
-        if not all(isinstance(entry, dict) for entry in remote_entries):
-            raise ValueError("Every alert in the snapshot must be an object")
-
-        # Parse every remote timestamp before writing anything, so malformed
-        # records cannot result in a partial archive update.
+        remote_entries = load_json_records(temp_path)
         remote_with_times = [
             (parse_issue_datetime(entry), index, entry)
             for index, entry in enumerate(remote_entries)
         ]
-
         archive_path = DATA_DIR / ALERTS_ARCHIVE
-        archive_entries = read_alerts_archive()
+        archive_entries = read_jsonl_archive(archive_path)
 
         if not archive_entries:
             if len(remote_entries) > MAX_NEW_ALERTS:
@@ -435,22 +472,13 @@ def update_alerts_archive(url: str, max_size: int) -> bool:
                     MAX_NEW_ALERTS,
                 )
                 return False
-
-            # NOAA sends newest first; store oldest first.
-            ordered = list(reversed(remote_entries))
-            with archive_path.open("a", encoding="utf-8") as file:
-                for item in ordered:
-                    file.write(json.dumps(item, separators=(",", ":")) + "\n")
+            append_jsonl_records(archive_path, list(reversed(remote_entries)))
             logger.info("Created %s from remote snapshot", ALERTS_ARCHIVE)
             return True
 
         latest_archive_time = max(
-            parse_issue_datetime(entry)
-            for entry in archive_entries
+            parse_issue_datetime(entry) for entry in archive_entries
         )
-
-        # Keep only strictly later issue times. Reversing the snapshot before
-        # a stable sort preserves oldest-first order for equal timestamps.
         new_entries = [
             (issue_time, entry)
             for issue_time, _index, entry in remote_with_times
@@ -461,34 +489,137 @@ def update_alerts_archive(url: str, max_size: int) -> bool:
 
         if len(new_entries) > MAX_NEW_ALERTS:
             logger.error(
-                "%s: Detected %d new alerts; skipping archive update to avoid runaway append",
+                "%s: Detected %d new alerts; skipping archive update",
                 ALERTS_ARCHIVE,
                 len(new_entries),
             )
             return False
-
         if not new_entries:
             logger.info("%s: No new alerts to append", ALERTS_ARCHIVE)
             return True
 
-        with archive_path.open("a", encoding="utf-8") as file:
-            for _issue_time, item in new_entries:
-                file.write(json.dumps(item, separators=(",", ":")) + "\n")
+        append_jsonl_records(
+            archive_path,
+            [entry for _issue_time, entry in new_entries],
+        )
+        logger.info("%s: Appended %d alerts", ALERTS_ARCHIVE, len(new_entries))
+        return True
 
+    except (json.JSONDecodeError, ValueError, TypeError, OSError) as error:
+        logger.error("%s: Archive update failed: %s", ALERTS_ARCHIVE, error)
+        return False
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+# --------------------------------------------------
+# Planetary K-index archive handling
+# --------------------------------------------------
+
+def parse_k_index_time_tag(entry: JSONRecord) -> datetime:
+    value = entry.get("time_tag")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("K-index record is missing a valid time_tag")
+
+    try:
+        timestamp = datetime.fromisoformat(value.strip())
+    except ValueError as error:
+        raise ValueError(f"Invalid time_tag: {value!r}") from error
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    timestamp = timestamp.astimezone(timezone.utc)
+    return timestamp.replace(minute=0, second=0, microsecond=0)
+
+
+def migrate_k_index_archive(archive_path: Path) -> bool:
+    """Seed JSONL from the legacy JSON snapshot once, if present."""
+
+    if archive_path.exists():
+        return True
+
+    legacy_path = DATA_DIR / KP_INDEX_LEGACY_FILENAME
+    if not legacy_path.exists():
+        return True
+
+    try:
+        records = load_json_records(legacy_path)
+        for record in records:
+            parse_k_index_time_tag(record)
+        write_jsonl_atomically(archive_path, records)
+        logger.info("Migrated %s to %s", legacy_path.name, archive_path.name)
+        return True
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError, OSError) as error:
+        logger.error("Could not migrate K-index archive: %s", error)
+        return False
+
+
+def update_k_index_archive() -> bool:
+    """Append K-index rows with a later date/hour to the JSONL archive."""
+
+    archive_path = DATA_DIR / KP_INDEX_FILENAME
+    if not migrate_k_index_archive(archive_path):
+        return False
+
+    logger.info("Processing %s", KP_INDEX_FILENAME)
+    temp_path = download_file(
+        KP_INDEX_URL,
+        DATA_DIR / KP_INDEX_LEGACY_FILENAME,
+        FILE_SIZE_LIMITS[KP_INDEX_LEGACY_FILENAME],
+    )
+    if temp_path is None:
+        logger.error("%s: Existing archive left untouched", KP_INDEX_FILENAME)
+        return False
+
+    try:
+        remote_entries = load_json_records(temp_path)
+        remote_with_times = [
+            (parse_k_index_time_tag(entry), index, entry)
+            for index, entry in enumerate(remote_entries)
+        ]
+        archive_entries = read_jsonl_archive(archive_path)
+
+        if not archive_entries:
+            # Keep source order (oldest to newest) for an initial archive.
+            append_jsonl_records(archive_path, remote_entries)
+            logger.info("Created %s from remote snapshot", KP_INDEX_FILENAME)
+            return True
+
+        archived_times = [
+            parse_k_index_time_tag(entry) for entry in archive_entries
+        ]
+        if any(
+            earlier > later
+            for earlier, later in zip(archived_times, archived_times[1:])
+        ):
+            raise ValueError("K-index archive is not ordered oldest to newest")
+        latest_archive_time = archived_times[-1]
+
+        new_entries = [
+            (timestamp, index, entry)
+            for timestamp, index, entry in remote_with_times
+            if timestamp > latest_archive_time
+        ]
+        new_entries.sort(key=lambda item: (item[0], item[1]))
+        records_to_append = [entry for _timestamp, _index, entry in new_entries]
+
+        if not records_to_append:
+            logger.info("%s: No new records to append", KP_INDEX_FILENAME)
+            return True
+
+        append_jsonl_records(archive_path, records_to_append)
         logger.info(
-            "%s: Appended %d alerts",
-            ALERTS_ARCHIVE,
-            len(new_entries),
+            "%s: Appended %d records",
+            KP_INDEX_FILENAME,
+            len(records_to_append),
         )
         return True
 
     except (json.JSONDecodeError, ValueError, TypeError, OSError) as error:
-        logger.error("%s: Alert archive update failed: %s", ALERTS_ARCHIVE, error)
+        logger.error("%s: Archive update failed: %s", KP_INDEX_FILENAME, error)
         return False
-
     finally:
-        if temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+        temp_path.unlink(missing_ok=True)
 
 
 # --------------------------------------------------
@@ -496,58 +627,30 @@ def update_alerts_archive(url: str, max_size: int) -> bool:
 # --------------------------------------------------
 
 def install_file(filename: str, temp_path: Path) -> bool:
-    """
-    Rotate backups and install the validated temporary file.
-
-    Existing files are not touched until validation succeeds.
-    """
+    """Rotate backups and install a validated temporary file."""
 
     current, old, older = backup_paths(filename)
-
     try:
         if old.exists():
             logger.info("%s -> %s", old.name, older.name)
             os.replace(old, older)
-
         if current.exists():
             logger.info("%s -> %s", current.name, old.name)
             os.replace(current, old)
-
         os.replace(temp_path, current)
-
-        logger.info(
-            "%s successfully updated",
-            filename,
-        )
-
+        logger.info("%s successfully updated", filename)
         return True
-
     except OSError as error:
-        logger.error(
-            "%s: Installation failed: %s",
-            filename,
-            error,
-        )
-
+        logger.error("%s: Installation failed: %s", filename, error)
         if not current.exists() and old.exists():
             try:
                 shutil.copy2(old, current)
-                logger.warning(
-                    "%s: Restored previous current file",
-                    filename,
-                )
+                logger.warning("%s: Restored previous current file", filename)
             except OSError as restore_error:
-                logger.critical(
-                    "%s: Restoration failed: %s",
-                    filename,
-                    restore_error,
-                )
-
+                logger.critical("%s: Restoration failed: %s", filename, restore_error)
         return False
-
     finally:
-        if temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+        temp_path.unlink(missing_ok=True)
 
 
 # --------------------------------------------------
@@ -556,18 +659,12 @@ def install_file(filename: str, temp_path: Path) -> bool:
 
 def update_file(filename: str, url: str, max_size: int) -> bool:
     destination = DATA_DIR / filename
-
     logger.info("Processing %s", filename)
 
     temp_path = download_file(url, destination, max_size)
-
     if temp_path is None:
-        logger.error(
-            "%s: Existing files left untouched",
-            filename,
-        )
+        logger.error("%s: Existing files left untouched", filename)
         return False
-
     return install_file(filename, temp_path)
 
 
@@ -575,31 +672,19 @@ def update_file(filename: str, url: str, max_size: int) -> bool:
 # Update log
 # --------------------------------------------------
 
-def write_update_log(results: dict) -> None:
-    """
-    Append one UTC-dated update summary to log.md.
-    """
+def write_update_log(results: Mapping[str, bool]) -> None:
+    """Append one UTC-dated update summary to log.txt."""
 
-    log_file = DATA_DIR / "log.md"
-
-    timestamp = datetime.now(timezone.utc).strftime(
-        "%d.%m.%Y %H:%M:%S UTC"
-    )
-
-    entries = []
-    for filename, success in results.items():
-        status = "success" if success else "fail"
-        entries.append(f"{filename}:{status}")
-
-    log_entry = (
-        f"{timestamp} - "
-        + " - ".join(entries)
-        + "\n"
-    )
+    log_file = DATA_DIR / "log.txt"
+    timestamp = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S UTC")
+    entries = [
+        f"{filename}:{'success' if success else 'fail'}"
+        for filename, success in results.items()
+    ]
+    log_entry = f"{timestamp} - " + " - ".join(entries) + "\n"
 
     with log_file.open("a", encoding="utf-8") as file:
         file.write(log_entry)
-
     logger.info("Update log appended to %s", log_file)
 
 
@@ -609,11 +694,10 @@ def write_update_log(results: dict) -> None:
 
 def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-
     logger.info("Starting weather data update")
     logger.info("Data directory: %s", DATA_DIR)
 
-    results = {}
+    results: dict[str, bool] = {}
     requests_made = 0
 
     for filename, url in FILES.items():
@@ -622,20 +706,21 @@ def main() -> None:
         results[filename] = update_file(
             filename,
             url,
-            FILE_SIZE_LIMITS.get(filename, 64 * 1024),
+            FILE_SIZE_LIMITS[filename],
         )
         requests_made += 1
 
-    if requests_made:
-        time.sleep(REQUEST_GAP_SECONDS)
-    results[ALERTS_ARCHIVE] = update_alerts_archive(
-        ALERTS_URL,
-        FILE_SIZE_LIMITS.get("alerts.json", 256 * 1024),
-    )
+    for archive_name, update_archive in (
+        (KP_INDEX_FILENAME, update_k_index_archive),
+        (ALERTS_ARCHIVE, update_alerts_archive),
+    ):
+        if requests_made:
+            time.sleep(REQUEST_GAP_SECONDS)
+        results[archive_name] = update_archive()
+        requests_made += 1
 
     logger.info("=" * 50)
     logger.info("Weather data update summary")
-
     for filename, success in results.items():
         logger.info(
             "%s: %s",
@@ -649,7 +734,6 @@ def main() -> None:
         logger.error("Could not write update log: %s", error)
 
     logger.info("=" * 50)
-
     if not all(results.values()):
         logger.warning("One or more files were not updated.")
     else:
@@ -663,4 +747,3 @@ if __name__ == "__main__":
 # Weather data from MET Norway (CC BY 4.0).
 # Space weather data from NOAA SWPC.
 # Local copies of the files are used when a live fetch fails.
-# allright
