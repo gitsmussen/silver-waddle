@@ -25,7 +25,7 @@ USER_AGENT = (
 )
 
 DATA_DIR = Path(
-    os.environ.get("DATA_DIR", Path(__file__).resolve().parent)
+    os.environ.get("DATA_DIR", Path(__file__).resolve().parent /"data",)
 )
 
 REQUEST_TIMEOUT = 30
