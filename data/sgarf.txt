@@ -1,50 +1,51 @@
 :Product: Report of Solar-Geophysical Activity
-:Issued: 2026 Nov 03 2200 UTC
+:Issued: 2026 Nov 04 2200 UTC
 # Prepared jointly by the U.S. Dept. of Commerce, NOAA,
 # Space Weather Prediction Center and the U.S. Air Force.
 #
 Joint USAF/NOAA Solar Geophysical Activity Report and Forecast
-SDF Number 307 Issued at 2200Z on 03 Nov 2026
+SDF Number 308 Issued at 2200Z on 04 Nov 2026
 
-IA.  Analysis of Solar Active Regions and Activity from 02/2100Z to
-03/2100Z: Solar activity has been at very low levels for the past 24
-hours. There are currently 3 numbered sunspot regions on the disk.
-IB.  Solar Activity Forecast: Solar activity is likely to be low with a
-chance for M-class flares and a slight chance for an X-class flare on
-days one, two, and three (04 Nov, 05 Nov, 06 Nov).
+IA.  Analysis of Solar Active Regions and Activity from 03/2100Z to
+04/2100Z: Solar activity has been at low levels for the past 24 hours.
+There are currently 4 numbered sunspot regions on the disk.
+IB.  Solar Activity Forecast: Solar activity is expected to be low with
+a chance for M-class flares and a slight chance for an X-class flare on
+days one, two, and three (05 Nov, 06 Nov, 07 Nov).
 
-IIA.  Geophysical Activity Summary 02/2100Z to 03/2100Z: The geomagnetic
-field has been at quiet levels for the past 24 hours. Solar wind speed
-reached a peak of 476 km/s at 03/0630Z. Total IMF reached 6 nT at
-03/0203Z. The maximum southward component of Bz reached -4 nT at
-03/0559Z. Electrons greater than 2 MeV at geosynchronous orbit reached a
-peak level of 4077 pfu at 03/1620Z.
+IIA.  Geophysical Activity Summary 03/2100Z to 04/2100Z: The geomagnetic
+field has been at quiet to unsettled levels for the past 24 hours. Solar
+wind speed reached a peak of 435 km/s at 04/1321Z. Total IMF reached 8
+nT at 04/0625Z. The maximum southward component of Bz reached -8 nT at
+04/0424Z. Electrons greater than 2 MeV at geosynchronous orbit reached a
+peak level of 2702 pfu at 03/2220Z.
 IIB.  Geophysical Activity Forecast: The geomagnetic field is expected
-to be at quiet levels on days one and three (04 Nov, 06 Nov) and quiet
-to active levels on day two (05 Nov).
+to be at quiet to active levels on day one (05 Nov), quiet to minor
+storm levels on day two (06 Nov) and unsettled to minor storm levels on
+day three (07 Nov).
 
-III.  Event probabilities 04 Nov-06 Nov
-Class M    25/25/25
+III.  Event probabilities 05 Nov-07 Nov
+Class M    30/35/35
 Class X    10/10/10
 Proton     05/05/05
 PCAF       green
 
 IV.  Penticton 10.7 cm Flux
-Observed           03 Nov 100
-Predicted   04 Nov-06 Nov 100/105/110
-90 Day Mean        03 Nov 109
+Observed           04 Nov 111
+Predicted   05 Nov-07 Nov 115/115/120
+90 Day Mean        04 Nov 109
 
 V.  Geomagnetic A Indices
-Observed Afr/Ap 02 Nov  006/007
-Estimated Afr/Ap 03 Nov  005/005
-Predicted Afr/Ap 04 Nov-06 Nov  006/005-010/012-007/008
+Observed Afr/Ap 03 Nov   NA/005
+Estimated Afr/Ap 04 Nov  009/010
+Predicted Afr/Ap 05 Nov-07 Nov  011/012-012/016-019/022
 
-VI.  Geomagnetic Activity Probabilities 04 Nov-06 Nov
+VI.  Geomagnetic Activity Probabilities 05 Nov-07 Nov
 A.  Middle Latitudes
-Active                10/30/15
-Minor Storm           01/15/05
-Major-severe storm    01/01/01
+Active                30/30/35
+Minor Storm           15/20/25
+Major-severe storm    01/05/05
 B.  High Latitudes
-Active                20/15/20
-Minor Storm           20/30/25
-Major-severe storm    10/40/20
+Active                15/10/10
+Minor Storm           30/25/25
+Major-severe storm    40/45/55
